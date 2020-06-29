@@ -210,7 +210,7 @@ class Sale(models.Model):
     collections = models.ManyToManyField("product.Collection", blank=True)
     start_date = models.DateTimeField(default=timezone.now)
     end_date = models.DateTimeField(null=True, blank=True)
-
+    customer = models.ForeignKey('account.User', on_delete=models.CASCADE, blank=True, null=True)
     objects = SaleQueryset.as_manager()
     translated = TranslationProxy()
 

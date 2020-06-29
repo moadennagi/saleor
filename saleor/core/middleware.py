@@ -1,4 +1,5 @@
 import logging
+import requests
 
 from django.conf import settings
 from django.contrib.sites.models import Site
@@ -7,8 +8,10 @@ from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 from django.utils.translation import get_language
 from django_countries.fields import Country
+from graphql_jwt.utils import jwt_decode
 
-from ..discount.utils import fetch_discounts
+from ..account.utils import decode_jwt_token
+from ..discount.utils import fetch_discounts, fetch_customer, deactivate_all_discounts, activate_user_discounts
 from ..plugins.manager import get_plugins_manager
 from . import analytics
 from .utils import get_client_ip, get_country_by_ip, get_currency_for_country
@@ -47,11 +50,34 @@ def request_time(get_response):
 
 
 def discounts(get_response):
-    """Assign active discounts to `request.discounts`."""
+    """Assign active discounts to `request.discounts`.
+
+        Only current user' sales are active
+    """
 
     def _discounts_middleware(request):
+        user = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            auth = auth_header.split(' ')
+            prefix = 'JWT'
+            if len(auth) == 2 and auth[0].lower() == prefix.lower():
+                token = auth[1]
+                decoded = jwt_decode(token)
+                email = decoded.get('email')
+                # send user info to foodelux - get company
+                response = requests.post('http://192.168.1.112:8080/users/company/', json=decoded)
+                
+                if response.status_code == 200:
+                    response_json = response.json()
+                    company = response_json.get('email')
+                    user = fetch_customer(company)
+
+        deactivate_all_discounts(request.request_time)
+        activate_user_discounts(user)
+
         request.discounts = SimpleLazyObject(
-            lambda: fetch_discounts(request.request_time)
+            lambda: fetch_discounts(request.request_time, user)
         )
         return get_response(request)
 

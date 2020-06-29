@@ -247,6 +247,7 @@ class SaleInput(graphene.InputObjectType):
     products = graphene.List(
         graphene.ID, description="Products related to the discount.", name="products"
     )
+    customer = graphene.ID(description="Customer id")
     categories = graphene.List(
         graphene.ID,
         description="Categories related to the discount.",

@@ -2,14 +2,16 @@ import datetime
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Union
 
+from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
 from prices import Money
 
+from ..account.models import User
 from ..checkout import calculations
 from ..core.taxes import zero_money
 from . import DiscountInfo
-from .models import NotApplicable, Sale, VoucherCustomer
+from .models import NotApplicable, Sale, VoucherCustomer, Sale
 
 if TYPE_CHECKING:
     # flake8: noqa
@@ -175,14 +177,43 @@ def _fetch_products(sale_pks: Iterable[str]) -> Dict[int, Set[int]]:
         product_map[sale_pk].add(product_pk)
     return product_map
 
+def deactivate_all_discounts(date: datetime.date) -> None:
+    """Deactivate all sales objects.
+    
+    all sales are deactivated (end_date -= 30 days)
+    """
+    updated = []
+    delta = datetime.timedelta(30)
+    sales = Sale.objects.active(date)
+    # deactivate all sales
+    for s in sales:
+        s.end_date = timezone.now() - delta
+        updated.append(s)
+    Sale.objects.bulk_update(updated, ['end_date'])
 
-def fetch_discounts(date: datetime.date) -> List[DiscountInfo]:
+def activate_user_discounts(user: User) -> None:
+    """Activate only the user' sales.
+    
+    all sales (customer_id == user.pk) are activated (end_date += 30 days)
+    """
+    updated = []
+    delta = datetime.timedelta(30)
+    if user:
+        # gactivate only the sales of the current user
+        sales = Sale.objects.filter(customer=user)
+        for sale in sales:
+            end_date = timezone.now() + delta
+            sale.end_date = end_date
+            updated.append(sale)
+        Sale.objects.bulk_update(updated, ['end_date'])
+
+def fetch_discounts(date: datetime.date, user: User = None) -> List[DiscountInfo]:
     sales = list(Sale.objects.active(date))
     pks = {s.pk for s in sales}
     collections = _fetch_collections(pks)
     products = _fetch_products(pks)
     categories = _fetch_categories(pks)
-
+    
     return [
         DiscountInfo(
             sale=sale,
@@ -193,6 +224,13 @@ def fetch_discounts(date: datetime.date) -> List[DiscountInfo]:
         for sale in sales
     ]
 
+def fetch_customer(pk: User.pk) -> User:
+    try:
+        user = User.objects.get(email=pk)
+        return user
+    except User.DoesNotExist as e:
+        print(e)
+        pass
 
 def fetch_active_discounts() -> List[DiscountInfo]:
     return fetch_discounts(timezone.now())
