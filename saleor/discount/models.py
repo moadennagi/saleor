@@ -205,6 +205,7 @@ class Sale(models.Model):
         decimal_places=settings.DEFAULT_DECIMAL_PLACES,
         default=0,
     )
+    customer = models.ForeignKey('account.User', on_delete=models.CASCADE, blank=True, null=True)
     products = models.ManyToManyField("product.Product", blank=True)
     categories = models.ManyToManyField("product.Category", blank=True)
     collections = models.ManyToManyField("product.Collection", blank=True)

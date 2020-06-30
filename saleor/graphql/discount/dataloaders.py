@@ -1,5 +1,5 @@
 from collections import defaultdict
-
+from ...plugins.manager import get_plugins_manager
 from ...discount import DiscountInfo
 from ...discount.models import Sale
 from ...product.models import Category
@@ -50,11 +50,21 @@ class DiscountsByDateTimeLoader(DataLoader):
         return product_map
 
     def batch_load(self, keys):
+        manager = get_plugins_manager()
+        plugins = manager.get_active_plugins()
         sales_map = {
             datetime: list(Sale.objects.active(datetime).order_by("id"))
             for datetime in keys
         }
         pks = {s.pk for d, ss in sales_map.items() for s in ss}
+        
+        for plugin in plugins:
+            if plugin.PLUGIN_ID == 'foodelux.filtersales':
+                filter_sale = plugin
+                # if the plugin is actve override the pks (TODO: refactor)
+                pks = filter_sale.preprocess_discounts(sales_map, context=self.context, user=self.user)
+
+      
         collections = self.fetch_collections(pks)
         products = self.fetch_products(pks)
         categories = self.fetch_categories(pks)

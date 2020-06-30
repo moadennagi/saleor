@@ -244,6 +244,7 @@ class SaleInput(graphene.InputObjectType):
     name = graphene.String(description="Voucher name.")
     type = DiscountValueTypeEnum(description="Fixed or percentage.")
     value = Decimal(description="Value of the voucher.")
+    customer = graphene.ID(descriptin="Customer related to the sale")
     products = graphene.List(
         graphene.ID, description="Products related to the discount.", name="products"
     )
